@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { User } from 'firebase/auth';
 import { ALL_SHOPS } from './data/telecomData';
-import { FilterState, ShopItem } from './types';
+import { FilterState, ShopItem, SyncLog } from './types';
 import { Sidebar } from './components/Sidebar';
 import { TopHeader } from './components/TopHeader';
 import { SubNavBar } from './components/SubNavBar';
@@ -22,6 +23,9 @@ import { CustomersView } from './components/views/CustomersView';
 import { GSheetsSyncView } from './components/views/GSheetsSyncView';
 import { PermissionsView } from './components/views/PermissionsView';
 
+// Auth Services
+import { initAuth, googleSignIn, logout } from './services/firebaseAuth';
+
 const INITIAL_FILTERS: FilterState = {
   period: 'oct-mtd',
   region: 'all',
@@ -32,15 +36,93 @@ const INITIAL_FILTERS: FilterState = {
   searchQuery: '',
 };
 
+const INITIAL_SYNC_LOGS: SyncLog[] = [
+  {
+    id: 'sync-init-1',
+    timestamp: '24m ago',
+    initiatedBy: 'Cron POS Daemon (Sheets v4 API)',
+    recordsCount: 42,
+    shopsCount: 42,
+    status: 'SUCCESS',
+    latencyMs: 290,
+  },
+  {
+    id: 'sync-init-2',
+    timestamp: '2h ago',
+    initiatedBy: 'Regional Admin Ledger Import',
+    recordsCount: 42,
+    shopsCount: 42,
+    status: 'SUCCESS',
+    latencyMs: 315,
+  },
+  {
+    id: 'sync-init-3',
+    timestamp: 'Yesterday 18:30',
+    initiatedBy: 'EOD Shift Audit Batch',
+    recordsCount: 42,
+    shopsCount: 42,
+    status: 'SUCCESS',
+    latencyMs: 402,
+  },
+];
+
 export default function App() {
   const [currentTab, setCurrentTab] = useState('overview');
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
+  const [shops, setShops] = useState<ShopItem[]>(ALL_SHOPS);
   const [selectedShopModal, setSelectedShopModal] = useState<ShopItem | null>(null);
   const [toastVisible, setToastVisible] = useState(true);
+  const [toastMessage, setToastMessage] = useState(
+    '184 records updated across 42 shops (14 OAB, 18 OTB, 7 GATE, 3 MIN)'
+  );
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [lastSyncText, setLastSyncText] = useState('G-Sheets Synced 2m ago');
   const [syncing, setSyncing] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+
+  // Google Workspace / Firebase Auth State
+  const [user, setUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [syncLogs, setSyncLogs] = useState<SyncLog[]>(INITIAL_SYNC_LOGS);
+
+  // Initialize Firebase Auth listener
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (authenticatedUser, token) => {
+        setUser(authenticatedUser);
+        setAccessToken(token);
+      },
+      () => {
+        setUser(null);
+        setAccessToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleSignIn = async () => {
+    try {
+      const res = await googleSignIn();
+      if (res) {
+        setUser(res.user);
+        setAccessToken(res.accessToken);
+        setLastSyncText('Google Workspace Connected');
+      }
+    } catch (err) {
+      console.error('Sign-in failed:', err);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      setUser(null);
+      setAccessToken(null);
+      setLastSyncText('Offline Ledger Mode');
+    } catch (err) {
+      console.error('Sign-out failed:', err);
+    }
+  };
 
   // Filter handlers
   const handleFilterChange = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
@@ -52,24 +134,65 @@ export default function App() {
     setSelectedServiceId(null);
   };
 
-  // Trigger manual sync
+  // Trigger manual sync or redirect to Google Sheets hub
   const handleManualSync = () => {
     if (syncing) return;
+    if (!user || !accessToken) {
+      // Direct user to Google Sheets integration tab to sign in or connect
+      setCurrentTab('g-sheets-sync');
+      return;
+    }
+
     setSyncing(true);
     setLastSyncText('Syncing with G-Sheets...');
     setTimeout(() => {
       setSyncing(false);
       setLastSyncText('G-Sheets Synced just now');
       setToastVisible(true);
-    }, 900);
+      setToastMessage(`✓ Real-time sync verified with Google Drive for ${shops.length} retail outlets`);
+    }, 800);
+  };
+
+  // Called when data is pulled from Google Sheets
+  const handleShopsUpdated = (newShops: ShopItem[], summaryMsg: string) => {
+    setShops(newShops);
+    setLastSyncText('G-Sheets Synced just now');
+    setToastMessage(summaryMsg);
+    setToastVisible(true);
   };
 
   // Export handlers
   const handleExport = (type: 'pdf' | 'xlsx' | 'csv') => {
     setExportMenuOpen(false);
     if (type === 'csv') {
-      const headers = ['Code', 'Name', 'LeadAgent', 'Region', 'RevenueMTD', 'Target', 'AchievementPct', 'Subs', 'FWBBTopUp', 'GrossAds', 'Status'];
-      const rows = ALL_SHOPS.map((s) => [s.code, `"${s.name}"`, `"${s.leadAgent}"`, `"${s.region}"`, s.revenueMtd, s.target, `${s.achievementPct}%`, s.activeSubs, s.fwbbTopUp, s.grossAds, s.status].join(','));
+      const headers = [
+        'Code',
+        'Name',
+        'LeadAgent',
+        'Region',
+        'RevenueMTD',
+        'Target',
+        'AchievementPct',
+        'Subs',
+        'FWBBTopUp',
+        'GrossAds',
+        'Status',
+      ];
+      const rows = shops.map((s) =>
+        [
+          s.code,
+          `"${s.name}"`,
+          `"${s.leadAgent}"`,
+          `"${s.region}"`,
+          s.revenueMtd,
+          s.target,
+          `${s.achievementPct}%`,
+          s.activeSubs,
+          s.fwbbTopUp,
+          s.grossAds,
+          s.status,
+        ].join(',')
+      );
       const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -84,13 +207,13 @@ export default function App() {
 
   // Filtered shops based on dropdown filters
   const filteredShops = useMemo(() => {
-    return ALL_SHOPS.filter((shop) => {
+    return shops.filter((shop) => {
       if (filters.region !== 'all' && shop.region !== filters.region) return false;
       if (filters.outlet !== 'all' && shop.name !== filters.outlet) return false;
       if (filters.agent !== 'all' && shop.leadAgent !== filters.agent) return false;
       return true;
     });
-  }, [filters]);
+  }, [shops, filters]);
 
   // Aggregate metrics
   const totalRevenue = useMemo(() => {
@@ -122,14 +245,18 @@ export default function App() {
 
       {/* 2. Main Content Area offset by fixed rail (w-64 = 256px) */}
       <div className="pl-64">
-        {/* Top Fixed Header */}
+        {/* Top Fixed Header with Google Workspace Controls */}
         <TopHeader
           lastSyncText={lastSyncText}
           onManualSync={handleManualSync}
           onSearchSelectShop={(shopName) => {
-            const found = ALL_SHOPS.find((s) => s.name === shopName);
+            const found = shops.find((s) => s.name === shopName);
             if (found) setSelectedShopModal(found);
           }}
+          user={user}
+          onSignInGoogle={handleSignIn}
+          onSignOutGoogle={handleSignOut}
+          onNavigateToGSheets={() => setCurrentTab('g-sheets-sync')}
         />
 
         <div className="pt-16">
@@ -153,9 +280,15 @@ export default function App() {
                       <span className="px-2 py-0.5 rounded-full bg-[#e5eeff] text-xs text-[#004ac6] font-semibold">
                         Q4 Fiscal
                       </span>
+                      {user && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-xs text-emerald-800 font-semibold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                          Google Sheets Connected
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-[#565e74]">
-                      Real-time performance intelligence, revenue tracking, and sales agent KPI monitoring across 42 retail shops
+                      Real-time performance intelligence, revenue tracking, and sales agent KPI monitoring across {shops.length} retail shops
                     </p>
                   </div>
 
@@ -228,7 +361,7 @@ export default function App() {
                   totalFwbb={totalFwbb}
                   avgAchievement={avgAchievement}
                   totalActiveSubs={totalActiveSubs}
-                  isFiltered={filteredShops.length < ALL_SHOPS.length}
+                  isFiltered={filteredShops.length < shops.length}
                 />
 
                 {/* Operational Intelligence Cockpit: Charts Section */}
@@ -264,7 +397,10 @@ export default function App() {
 
             {/* Other Dedicated Operational Screens */}
             {currentTab === 'performance-table' && (
-              <PerformanceTableView onOpenShopModal={(shop) => setSelectedShopModal(shop)} />
+              <PerformanceTableView
+                shops={shops}
+                onOpenShopModal={(shop) => setSelectedShopModal(shop)}
+              />
             )}
 
             {currentTab === 'actual-vs-kpi' && <ActualVsKpiView />}
@@ -279,9 +415,17 @@ export default function App() {
 
             {currentTab === 'g-sheets-sync' && (
               <GSheetsSyncView
-                onTriggerSync={handleManualSync}
-                syncing={syncing}
-                lastSyncText={lastSyncText}
+                user={user}
+                accessToken={accessToken}
+                onAuthSuccess={(u, token) => {
+                  setUser(u);
+                  setAccessToken(token);
+                }}
+                onLogout={handleSignOut}
+                currentShops={shops}
+                onShopsUpdated={handleShopsUpdated}
+                syncLogs={syncLogs}
+                onAddSyncLog={(newLog) => setSyncLogs((prev) => [newLog, ...prev])}
               />
             )}
 
@@ -300,7 +444,7 @@ export default function App() {
       <SyncToast
         visible={toastVisible}
         onDismiss={() => setToastVisible(false)}
-        syncSummary="184 records updated across 42 shops (14 OAB, 18 OTB, 7 GATE, 3 MIN)"
+        syncSummary={toastMessage}
       />
     </div>
   );

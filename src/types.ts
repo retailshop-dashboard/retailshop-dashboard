@@ -68,11 +68,13 @@ export interface SyncLogEntry {
   id: string;
   timestamp: string;
   recordsCount: number;
-  shopsCount: number;
+  shopsCount?: number;
   status: 'SUCCESS' | 'SYNCING' | 'ERROR';
   latencyMs: number;
   initiatedBy: string;
 }
+
+export type SyncLog = SyncLogEntry;
 
 export interface CustomerRecord {
   id: string;

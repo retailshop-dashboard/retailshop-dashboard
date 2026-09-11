@@ -1,15 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { User } from 'firebase/auth';
+import { GoogleSignInButton } from './GoogleSignInButton';
 
 interface TopHeaderProps {
   lastSyncText: string;
   onManualSync: () => void;
   onSearchSelectShop?: (shopName: string) => void;
+  user?: User | null;
+  onSignInGoogle?: () => void;
+  onSignOutGoogle?: () => void;
+  onNavigateToGSheets?: () => void;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
   lastSyncText,
   onManualSync,
   onSearchSelectShop,
+  user,
+  onSignInGoogle,
+  onSignOutGoogle,
+  onNavigateToGSheets,
 }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,8 +51,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     },
     {
       id: '2',
-      title: 'Google Sheets Automatic Sync Completed',
-      desc: '184 records updated across 42 active shops without discrepancy.',
+      title: 'Google Sheets Automatic Sync Ready',
+      desc: 'Bi-directional link configured. Connect your Google account to stream live POS logs.',
       time: '24m ago',
       urgent: false,
     },
@@ -100,7 +110,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setSearchOpen(true)}
             onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
-            className="w-64 pl-8 pr-12 py-1.5 text-xs bg-[#f8f9ff] text-[#0b1c30] placeholder:text-[#94a3b8] rounded border border-[#e2e8f0] focus:outline-none focus:ring-1 focus:ring-[#2563eb] focus:border-[#2563eb] transition-all"
+            className="w-56 pl-8 pr-12 py-1.5 text-xs bg-[#f8f9ff] text-[#0b1c30] placeholder:text-[#94a3b8] rounded border border-[#e2e8f0] focus:outline-none focus:ring-1 focus:ring-[#2563eb] focus:border-[#2563eb] transition-all"
             placeholder="Search shops, agents, KPIs..."
             type="text"
           />
@@ -128,7 +138,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                     </span>
                     <div>
                       <div className="font-semibold text-[#0b1c30]">{item.name}</div>
-                      <div className="text-[11px] text-[#64748b]">{item.agent} · {item.region}</div>
+                      <div className="text-[11px] text-[#64748b]">
+                        {item.agent} · {item.region}
+                      </div>
                     </div>
                   </div>
                   <span
@@ -152,14 +164,42 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
         {/* G-Sheets Synced Pill */}
         <button
-          onClick={onManualSync}
-          title="Click to trigger instant live sync with Google Sheets"
+          onClick={() => {
+            if (onNavigateToGSheets) {
+              onNavigateToGSheets();
+            } else {
+              onManualSync();
+            }
+          }}
+          title="Click to open Google Sheets Live Sync Hub"
           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#e5eeff] hover:bg-[#dbe1ff] text-[#0b1c30] text-xs transition-colors cursor-pointer border border-[#c3c6d7]/30"
         >
           <span className="w-2 h-2 rounded-full bg-[#007d55] animate-pulse"></span>
           <span className="font-medium text-[11px]">{lastSyncText}</span>
-          <span className="material-symbols-outlined text-[13px] text-[#007d55]">sync</span>
+          <span className="material-symbols-outlined text-[13px] text-[#007d55]">table_chart</span>
         </button>
+
+        {/* Google Workspace Sign-In / Account Indicator */}
+        {!user ? (
+          onSignInGoogle && (
+            <div className="hidden sm:block">
+              <GoogleSignInButton
+                onClick={onSignInGoogle}
+                text="Connect Sheets"
+                className="scale-90 origin-right"
+              />
+            </div>
+          )
+        ) : (
+          <div
+            onClick={onNavigateToGSheets}
+            className="cursor-pointer hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-medium"
+            title={`Connected to Google Workspace as ${user.email}`}
+          >
+            <span className="material-symbols-outlined text-sm text-emerald-600">cloud_done</span>
+            <span className="truncate max-w-[100px]">{user.displayName || user.email?.split('@')[0]}</span>
+          </div>
+        )}
 
         {/* Notifications Icon Button */}
         <div className="relative">
@@ -216,51 +256,82 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             onClick={() => setProfileOpen(!profileOpen)}
             className="flex items-center gap-2 pl-1 py-1 rounded hover:bg-slate-50 transition-colors text-left"
           >
-            <img
-              alt="Marcus Vance Profile"
-              className="w-8 h-8 rounded-full object-cover ring-1 ring-[#c3c6d7]"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqipK6IGAmk6E6j8c088UUxvidtfJr2GwJTW63HnAvigC1XQlxoE9nuIyvWJTlyJtJnKYIW4RkoT9YMNJZw4KzrcEgG2I2ShZtmXnR7XRnIE-XlWfvbqAAwoJ3NsBXp-8WRpXDdKAIs6QnngR5cYTNi1RKeEx6Llq4sCJXO7_6ws_8z1ocfPiau5d7SO0BLIGVMNl2VxRLvt2Gif0XZq_vie9FeAwQSYF8P7R5lU70THEY2YNmSRgUEg"
-            />
+            {user?.photoURL ? (
+              <img
+                alt={user.displayName || 'Google Profile'}
+                className="w-8 h-8 rounded-full object-cover ring-1 ring-[#c3c6d7]"
+                src={user.photoURL}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <img
+                alt="Marcus Vance Profile"
+                className="w-8 h-8 rounded-full object-cover ring-1 ring-[#c3c6d7]"
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqipK6IGAmk6E6j8c088UUxvidtfJr2GwJTW63HnAvigC1XQlxoE9nuIyvWJTlyJtJnKYIW4RkoT9YMNJZw4KzrcEgG2I2ShZtmXnR7XRnIE-XlWfvbqAAwoJ3NsBXp-8WRpXDdKAIs6QnngR5cYTNi1RKeEx6Llq4sCJXO7_6ws_8z1ocfPiau5d7SO0BLIGVMNl2VxRLvt2Gif0XZq_vie9FeAwQSYF8P7R5lU70THEY2YNmSRgUEg"
+              />
+            )}
             <div className="flex flex-col">
               <div className="flex items-center gap-0.5">
-                <span className="font-semibold text-xs text-[#0b1c30] leading-none">Marcus Vance</span>
+                <span className="font-semibold text-xs text-[#0b1c30] leading-none truncate max-w-[110px]">
+                  {user ? user.displayName || 'Google User' : 'Marcus Vance'}
+                </span>
                 <span className="material-symbols-outlined text-xs text-[#565e74]">arrow_drop_down</span>
               </div>
-              <span className="text-[10px] text-[#565e74] mt-0.5">Regional Director</span>
+              <span className="text-[10px] text-[#565e74] mt-0.5">
+                {user ? 'Authenticated' : 'Regional Director'}
+              </span>
             </div>
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-[#e2e8f0] py-1.5 z-50 text-xs animate-in fade-in">
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-[#e2e8f0] py-1.5 z-50 text-xs animate-in fade-in">
               <div className="px-3 py-2 border-b border-[#f1f5f9]">
-                <div className="font-semibold text-[#0b1c30]">Marcus Vance</div>
-                <div className="text-[11px] text-[#64748b]">marcus.vance@telecom.corp</div>
+                <div className="font-semibold text-[#0b1c30]">
+                  {user?.displayName || 'Marcus Vance'}
+                </div>
+                <div className="text-[11px] text-[#64748b] truncate">
+                  {user?.email || 'marcus.vance@telecom.corp'}
+                </div>
                 <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">
-                  APAC Super Admin
+                  {user ? 'Google Workspace Connected' : 'APAC Super Admin'}
                 </div>
               </div>
               <div className="py-1">
                 <button
-                  onClick={() => setProfileOpen(false)}
+                  onClick={() => {
+                    setProfileOpen(false);
+                    if (onNavigateToGSheets) onNavigateToGSheets();
+                  }}
                   className="w-full px-3 py-1.5 text-left text-[#334155] hover:bg-[#f8f9ff] flex items-center gap-2"
                 >
-                  <span className="material-symbols-outlined text-sm">settings</span>
-                  Operations Preferences
+                  <span className="material-symbols-outlined text-sm text-emerald-600">table_chart</span>
+                  Google Sheets Settings
                 </button>
-                <button
-                  onClick={() => setProfileOpen(false)}
-                  className="w-full px-3 py-1.5 text-left text-[#334155] hover:bg-[#f8f9ff] flex items-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-sm">notifications_active</span>
-                  Alert Thresholds
-                </button>
-                <button
-                  onClick={() => setProfileOpen(false)}
-                  className="w-full px-3 py-1.5 text-left text-[#334155] hover:bg-[#f8f9ff] flex items-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-sm">shield</span>
-                  Security & 2FA
-                </button>
+                {user ? (
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false);
+                      if (onSignOutGoogle) onSignOutGoogle();
+                    }}
+                    className="w-full px-3 py-1.5 text-left text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium"
+                  >
+                    <span className="material-symbols-outlined text-sm">logout</span>
+                    Sign Out Google Account
+                  </button>
+                ) : (
+                  onSignInGoogle && (
+                    <button
+                      onClick={() => {
+                        setProfileOpen(false);
+                        onSignInGoogle();
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-[#2563eb] hover:bg-blue-50 flex items-center gap-2 font-medium"
+                    >
+                      <span className="material-symbols-outlined text-sm">login</span>
+                      Sign in with Google
+                    </button>
+                  )
+                )}
               </div>
             </div>
           )}

@@ -4,9 +4,10 @@ import { ShopItem } from '../../types';
 
 interface PerformanceTableViewProps {
   onOpenShopModal: (shop: ShopItem) => void;
+  shops?: ShopItem[];
 }
 
-export const PerformanceTableView: React.FC<PerformanceTableViewProps> = ({ onOpenShopModal }) => {
+export const PerformanceTableView: React.FC<PerformanceTableViewProps> = ({ onOpenShopModal, shops = ALL_SHOPS }) => {
   const [regionFilter, setRegionFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -14,7 +15,7 @@ export const PerformanceTableView: React.FC<PerformanceTableViewProps> = ({ onOp
   const [sortAsc, setSortAsc] = useState(false);
 
   const filtered = useMemo(() => {
-    return ALL_SHOPS.filter((s) => {
+    return shops.filter((s) => {
       if (regionFilter !== 'all' && s.region !== regionFilter) return false;
       if (statusFilter !== 'all' && s.status !== statusFilter) return false;
       if (search.trim()) {
@@ -34,7 +35,7 @@ export const PerformanceTableView: React.FC<PerformanceTableViewProps> = ({ onOp
       }
       return 0;
     });
-  }, [regionFilter, statusFilter, search, sortField, sortAsc]);
+  }, [shops, regionFilter, statusFilter, search, sortField, sortAsc]);
 
   const handleSort = (f: keyof ShopItem) => {
     if (sortField === f) setSortAsc(!sortAsc);
