@@ -15,7 +15,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
             <img
               alt="Telecom Business Portal Logo"
               className="h-8 w-auto object-contain"
+              referrerPolicy="no-referrer"
               src="https://lh3.googleusercontent.com/aida/AEtjO1XPUPPOhFE26K2q0fQiQcPBLqugpn4309hfC9Pm5Nm5kkQMNGrVvX7RdU8143Vdcn_rAuakNF77NIFKh1ldur9KLnRbjyXPbY-WUtpASSKlKucVZlBpWG2lfb8i0ja9yRsMRJ2H5QxlpYh73UXssamA4UYeqBDEGaXn-wDlZMS-v83nQpgI9z-dMLoVUaLGhTzzdBHHfiSEe_DgVDl_v_q5YtBomUr5DhPzxazTAo2Q5_q8_SaMpSDE-Ger"
+              onError={(e) => {
+                e.currentTarget.src = '/favicon.svg';
+              }}
             />
             <div className="flex flex-col">
               <span className="font-headline font-semibold text-base text-[#eaf1ff] leading-none">TelePortal</span>

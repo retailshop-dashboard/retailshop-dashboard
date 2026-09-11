@@ -268,6 +268,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 alt="Marcus Vance Profile"
                 className="w-8 h-8 rounded-full object-cover ring-1 ring-[#c3c6d7]"
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqipK6IGAmk6E6j8c088UUxvidtfJr2GwJTW63HnAvigC1XQlxoE9nuIyvWJTlyJtJnKYIW4RkoT9YMNJZw4KzrcEgG2I2ShZtmXnR7XRnIE-XlWfvbqAAwoJ3NsBXp-8WRpXDdKAIs6QnngR5cYTNi1RKeEx6Llq4sCJXO7_6ws_8z1ocfPiau5d7SO0BLIGVMNl2VxRLvt2Gif0XZq_vie9FeAwQSYF8P7R5lU70THEY2YNmSRgUEg"
+                referrerPolicy="no-referrer"
               />
             )}
             <div className="flex flex-col">
